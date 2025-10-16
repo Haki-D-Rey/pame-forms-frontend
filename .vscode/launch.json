@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Expo Go (LAN) – Start & Debug",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "expo",
+      "cwd": "${workspaceFolder}",
+      "enableDebugging": true,
+      "expoHostType": "lan",
+      "killPackagerOnStop": true
+    },
+    {
+      "name": "Expo Go (Tunnel) – Start & Debug",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "expo",
+      "cwd": "${workspaceFolder}",
+      "enableDebugging": true,
+      "expoHostType": "tunnel",
+      "killPackagerOnStop": true
+    },
+    {
+      "name": "Dev Client – Start & Debug (Android/iOS)",
+      "type": "reactnative",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "enableDebugging": true,
+      "platform": "android",
+      "runArguments": ["--dev-client"],
+      "killPackagerOnStop": true
+    },
+    {
+      "name": "Attach – Hermes (Android)",
+      "type": "reactnative",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "platform": "android",
+      "useHermesEngine": true,
+      "sourceMaps": true
+    },
+    {
+      "name": "Attach – Hermes (iOS)",
+      "type": "reactnative",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "platform": "ios",
+      "useHermesEngine": true,
+      "sourceMaps": true
+    }
+  ]
+}
