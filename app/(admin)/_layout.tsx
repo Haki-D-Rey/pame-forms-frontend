@@ -1,10 +1,10 @@
-// app/(admin)/_layout.tsx
-import { Stack } from 'expo-router';
+import AdminShell from '@/components/admin/AdminSell';
+import { Slot } from 'expo-router';
 
 export default function AdminLayout() {
-  return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: 'Admin' }} />
-    </Stack>
-  );
+    return (
+        <AdminShell>
+            <Slot />
+        </AdminShell>
+    );
 }

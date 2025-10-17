@@ -2,6 +2,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAuth } from '@/providers/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -21,13 +22,16 @@ export default function RegisterScreen() {
     const router = useRouter();
     const text = useThemeColor({}, 'text');
     const bg = useThemeColor({}, 'background');
+    const { register } = useAuth();
 
     const { handleSubmit, setValue, formState: { errors, isSubmitting, isValid } } =
         useForm<RegisterForm>({ resolver: zodResolver(RegisterSchema), mode: 'onChange' });
 
     const onSubmit = async (data: RegisterForm) => {
         // TODO: registrar en backend
-        router.replace('/(auth)/login');
+        const response = await register({ email: data.email, password: data.password, role: 'UserStandard' });
+        console.log(response);
+        router.replace('/(auth)/auth/login');
     };
 
     return (
@@ -53,7 +57,7 @@ export default function RegisterScreen() {
                         </ThemedText>
                     </Pressable>
 
-                    <Pressable onPress={() => router.push('/(auth)/login')} style={styles.linkRow}>
+                    <Pressable onPress={() => router.push('/(auth)/auth/login')} style={styles.linkRow}>
                         <ThemedText style={[styles.linkText, { color: text }]}>¿Ya tienes cuenta? Inicia sesión</ThemedText>
                     </Pressable>
                 </View>

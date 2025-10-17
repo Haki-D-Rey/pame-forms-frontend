@@ -2,10 +2,10 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from './config';
 
-export const apiPublic: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 15000,
-});
+// export const apiPublic: AxiosInstance = axios.create({
+//   baseURL: API_BASE_URL,
+//   timeout: 15000,
+// });
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
