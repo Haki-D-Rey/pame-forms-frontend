@@ -7,6 +7,7 @@ import React, { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import BannerOffline from '@/components/BannerOffline';
+import { GlobalAlertProvider } from '@/components/globalAlertComponent';
 import ApiProvider from '@/providers/api-provider';
 import { AuthProvider, useAuth } from '@/providers/auth';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -25,16 +26,20 @@ function useAuthGuard() {
   }, [segments, isSignedIn, isLoading]);
 }
 
+
 function RootStack() {
   useAuthGuard();
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(admin)" options={{ headerShown: false }} />
-        </Stack>
-      </SafeAreaView>
+      <GlobalAlertProvider logoDefault={require('@/assets/images/pame-logo-t.png')}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <BannerOffline />
+          <Stack>
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+          </Stack>
+        </SafeAreaView>
+      </GlobalAlertProvider>
     </SafeAreaProvider>
   );
 }
@@ -45,7 +50,6 @@ export default function RootLayout() {
     <AuthProvider>
       <ApiProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <BannerOffline />
           <RootStack />
           <StatusBar style="auto" />
         </ThemeProvider>

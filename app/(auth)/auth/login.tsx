@@ -1,14 +1,16 @@
 // app/(auth)/login.tsx
+import { useGlobalAlert } from '@/components/globalAlertComponent';
 import Loader from '@/components/Loader';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuth } from '@/providers/auth';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,11 +18,11 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
-  View
+  View,
 } from 'react-native';
 import Animated, {
   FadeIn,
-  FadeInDown, // 👈 añadimos FadeOut
+  FadeInDown,
   FadeInUp,
   FadeOut,
   useAnimatedStyle,
@@ -34,6 +36,8 @@ const LoginSchema = z.object({
   password: z.string().min(4, 'Mínimo 4 caracteres'),
 });
 type LoginForm = z.infer<typeof LoginSchema>;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -56,37 +60,84 @@ export default function LoginScreen() {
     email: false,
     password: false,
   });
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [postLogin, setPostLogin] = useState(false);
 
+  const { show } = useGlobalAlert();
+
+  // Helper: muestra alerta y espera a que termine antes de continuar
+  const awaitAlert = async (opts: {
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+    duration?: number; // ms visible
+    logo?: any;
+  }) => {
+    const duration = opts.duration ?? 1500;
+    show({ ...opts, duration });
+    // margen para animaciones de entrada/salida
+    await sleep(duration + 350);
+  };
+
   const {
+    control,
     handleSubmit,
-    setValue,
+    reset,
+    clearErrors,
     formState: { errors, isSubmitting, isValid },
-  } = useForm<LoginForm>({ resolver: zodResolver(LoginSchema), mode: 'onChange' });
+  } = useForm<LoginForm>({
+    resolver: zodResolver(LoginSchema),
+    mode: 'onChange',
+    defaultValues: { email: '', password: '' },
+  });
 
   // Micro-animación botón
   const scale = useSharedValue(1);
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const onPressIn = () => (scale.value = withTiming(0.98, { duration: 90 }));
   const onPressOut = () => (scale.value = withTiming(1, { duration: 90 }));
+  const [showPass, setShowPass] = useState(false);
 
   const passwordRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+
+
+  const clearForm = () => {
+    reset({ email: '', password: '' });
+    clearErrors();
+    setFocus((s) => ({ ...s, email: true, password: false }));
+    requestAnimationFrame(() => {
+      emailRef.current?.focus();
+    });
+  };
+
 
   const onSubmit = async (data: LoginForm) => {
-    setSubmitError(null);
     try {
-      await signIn({ email: data.email.trim(), password: data.password });
-      // 👇 muestra overlay “post login” por 2s con fade y luego navega
       setPostLogin(true);
-      await new Promise((r) => setTimeout(r, 2000));
-      router.replace('/(admin)/dashboard/home');
-      // (opcional) ocultar si sigues en esta pantalla
+      await signIn({ email: data.email.trim().toLowerCase(), password: data.password });
+      // 3) OCULTA LOADER, MUESTRA ALERTA y ESPERA cierre
       setPostLogin(false);
-    } catch (e: any) {
-      setSubmitError(
-        'No se pudo iniciar sesión. Verifica tus credenciales e intenta nuevamente - ' + e?.message
-      );
+      await awaitAlert({
+        type: 'success',
+        title: 'Credenciales Correctas',
+        message: 'Bienvenido al Panel Corporativo',
+        duration: 1500,
+        logo: require('@/assets/images/pame-logo-t.png'),
+      });
+      await sleep(2000);
+      setPostLogin(false);
+      router.replace('/(admin)/dashboard/home');
+    } catch {
+      // Falló login: limpia campos y muestra alerta de error
+      setPostLogin(false);
+      clearForm();
+      await awaitAlert({
+        type: 'error',
+        title: 'Credenciales Incorrectas',
+        message: 'No se pudo iniciar sesión. Verifica tus credenciales e intenta nuevamente',
+        duration: 2000,
+        logo: require('@/assets/images/pame-logo-t.png'),
+      });
     }
   };
 
@@ -110,9 +161,6 @@ export default function LoginScreen() {
         >
           {/* Header con logo */}
           <Animated.View entering={FadeInUp.springify().damping(16)} style={styles.header}>
-            {/* Si usas createAnimatedComponent:
-              <AnimatedImage ... />
-             De lo contrario Animated.Image suele funcionar en Reanimated 3 */}
             <Animated.Image
               entering={FadeInDown.delay(80).springify().damping(14)}
               source={logoSource}
@@ -140,47 +188,82 @@ export default function LoginScreen() {
           >
             {/* Email */}
             <View style={[styles.field, focus.email && { borderColor: tint }]}>
-              <TextInput
-                placeholder="Correo electrónico"
-                placeholderTextColor={muted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                textContentType="emailAddress"
-                returnKeyType="next"
-                onChangeText={(t) => setValue('email', t, { shouldValidate: true })}
-                onFocus={() => setFocus((s) => ({ ...s, email: true }))}
-                onBlur={() => setFocus((s) => ({ ...s, email: false }))}
-                onSubmitEditing={() => passwordRef.current?.focus()}
-                style={[styles.input, { color: textColor }]}
+              <Controller
+                name="email"
+                control={control}
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <TextInput
+                    ref={emailRef}
+                    value={value}
+                    onChangeText={(t) => onChange(t)}
+                    onBlur={() => {
+                      onBlur();
+                      setFocus((s) => ({ ...s, email: false }));
+                    }}
+                    onFocus={() => setFocus((s) => ({ ...s, email: true }))}
+                    placeholder="Correo electrónico"
+                    placeholderTextColor={muted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    style={[styles.input, { color: textColor }]}
+                    clearButtonMode="while-editing"
+                  />
+                )}
               />
             </View>
             {errors.email && <ThemedText style={styles.errorText}>{errors.email.message}</ThemedText>}
 
             {/* Password */}
-            <View style={[styles.field, focus.password && { borderColor: tint }]}>
-              <TextInput
-                ref={passwordRef}
-                placeholder="Contraseña"
-                placeholderTextColor={muted}
-                secureTextEntry
-                autoComplete="password"
-                textContentType="password"
-                returnKeyType="go"
-                onChangeText={(t) => setValue('password', t, { shouldValidate: true })}
-                onFocus={() => setFocus((s) => ({ ...s, password: true }))}
-                onBlur={() => setFocus((s) => ({ ...s, password: false }))}
-                onSubmitEditing={handleSubmit(onSubmit)}
-                style={[styles.input, { color: textColor }]}
+            <View
+              style={[styles.fieldWrap /* contenedor relativo */, focus.password && { borderColor: tint }]}
+            >
+              <Controller
+                name="password"
+                control={control}
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <TextInput
+                    ref={passwordRef}
+                    value={value}
+                    onChangeText={(t) => onChange(t)}
+                    onBlur={() => {
+                      onBlur();
+                      setFocus((s) => ({ ...s, password: false }));
+                    }}
+                    onFocus={() => setFocus((s) => ({ ...s, password: true }))}
+                    placeholder="Contraseña"
+                    placeholderTextColor={muted}
+                    secureTextEntry={!showPass}
+                    autoComplete="password"
+                    textContentType="password"
+                    returnKeyType="go"
+                    onSubmitEditing={handleSubmit(onSubmit)}
+                    style={[styles.input, { color: textColor, paddingRight: 44 }]}
+                  />
+                )}
               />
+
+              {/* Botón ojo (derecha) */}
+              <Pressable
+                onPress={() => setShowPass((v) => !v)}
+                style={styles.rightAdornment}
+                accessibilityRole="button"
+                accessibilityLabel={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                <MaterialCommunityIcons
+                  name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#64748b"
+                />
+              </Pressable>
             </View>
             {errors.password && (
               <ThemedText style={styles.errorText}>{errors.password.message}</ThemedText>
             )}
-
-            {/* Error de submit (credenciales / red) */}
-            {submitError && <ThemedText style={styles.submitError}>{submitError}</ThemedText>}
 
             {/* Primary CTA */}
             <Animated.View style={btnStyle}>
@@ -208,9 +291,9 @@ export default function LoginScreen() {
               <Link href={{ pathname: '/(auth)/auth/register' }} style={styles.link}>
                 <ThemedText style={styles.linkText}>Crear cuenta</ThemedText>
               </Link>
-              <Pressable onPress={() => { /* TODO: /forgot */ }} style={styles.link}>
+              <Link href={{ pathname: '/(auth)/auth/forgot-password' }} style={styles.link}>
                 <ThemedText style={styles.linkText}>¿Olvidaste la contraseña?</ThemedText>
-              </Pressable>
+              </Link>
             </View>
 
             {/* Legal */}
@@ -222,7 +305,7 @@ export default function LoginScreen() {
           {/* Footer */}
           <Animated.View entering={FadeIn.delay(150).duration(400)} style={styles.footer}>
             <ThemedText style={[styles.footerText, { color: textColor }]}>
-              © {new Date().getFullYear()} Pame Corp
+              © {new Date().getFullYear()} Pame S.A
             </ThemedText>
           </Animated.View>
         </KeyboardAvoidingView>
@@ -231,10 +314,9 @@ export default function LoginScreen() {
       {/* Loader overlay con animación de aparición/desaparición */}
       {(isSubmitting || postLogin) && (
         <Animated.View
-          // Aparece suave cuando comienza submit o postLogin
           entering={FadeIn.duration(180)}
           exiting={FadeOut.duration(220)}
-          style={StyleSheet.absoluteFill}   // asegura que cubra toda la pantalla
+          style={StyleSheet.absoluteFill}
           pointerEvents="box-none"
         >
           <Loader
@@ -280,9 +362,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#00000008',
     marginBottom: 8,
   },
+  fieldWrap: {
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#00000022',
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+  },
   input: {
-    paddingVertical: 0,
-    fontSize: 15.5,
+    height: 52,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  rightAdornment: {
+    position: 'absolute',
+    right: 8,
+    top: 0,
+    height: 52,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: { color: '#ef4444', marginBottom: 8, fontSize: 13 },
   submitError: { color: '#dc2626', marginTop: 4, marginBottom: 6, textAlign: 'center' },

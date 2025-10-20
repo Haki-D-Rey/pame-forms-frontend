@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { safeDel, safeGet, safeSet } from '@/lib/safe-store';
+import * as AuthClient from '@/services/auth-client';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 type User = { email: string } | null;
@@ -26,6 +27,9 @@ type AuthContextType = {
     getAccessToken: () => Promise<string | null>;
     getRefreshToken: () => Promise<string | null>;
     refreshAccessToken: () => Promise<string | null>;
+    requestPasswordReset: (email: string) => Promise<any>,
+    verifyResetCode: (data_user: { email: string, code: string }) => Promise<any>,
+    resetPassword: (data_user: { email: string, resetToken: string, newPassword: string }) => Promise<any>,
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -100,7 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
             console.log(error);
         }
-
     }
 
     const getAccessToken = async () => {
@@ -136,6 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
     };
 
+    const requestPasswordReset = AuthClient.requestPasswordReset;
+    const verifyResetCode = AuthClient.verifyResetCode;
+    const resetPassword = AuthClient.resetPassword;
+
     const value = useMemo<AuthContextType>(() => ({
         isLoading,
         isSignedIn: !!user && !!token,
@@ -148,6 +155,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getAccessToken,
         getRefreshToken,
         refreshAccessToken,
+        requestPasswordReset,
+        verifyResetCode,
+        resetPassword,
     }), [isLoading, user, token, rToken]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
