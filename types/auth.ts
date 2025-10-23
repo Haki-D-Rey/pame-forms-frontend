@@ -66,3 +66,12 @@ export type RegisterPayload = {
 
 /** Respuesta completa de registro */
 export type RegisterResponse = ApiResponse<RegisterPayload>;
+
+export type RoleSafeDTO = {
+    id: number;
+    name: string;
+    status: boolean;
+    createdAt: Date;
+    updatedAt?: Date; // null -> undefined en el mapeo
+};
+

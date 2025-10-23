@@ -35,6 +35,10 @@ export default function VerifyCodeScreen() {
   const [postVerify, setPostVerify] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
+  const busy = isSubmitting || postVerify;
+  const busyMsg = isSubmitting ? 'Verificando el código…' : 'Preparando tu panel…';
+
+
   useEffect(() => {
     const t = setInterval(() => setSeconds((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(t);
@@ -55,14 +59,16 @@ export default function VerifyCodeScreen() {
       await new Promise((r) => setTimeout(r, 2000));
       setPostVerify(false);
       router.push({ pathname: '/(auth)/auth/reset-password', params: { email, resetToken: response.resetToken } });
-    } catch {
+    } catch (e) {
       show({
         type: 'error',
-        title: 'El envio de correo Fallo',
-        message: `El Codigo de Seguridad ${code} no es valido`,
+        title: 'Código inválido',
+        message: `El código ${code} no es válido.`,
         duration: 2000,
         logo: require('@/assets/images/pame-logo-t.png'),
-      })
+      });
+    } finally {
+      setPostVerify(false);
     }
 
   };
@@ -83,14 +89,15 @@ export default function VerifyCodeScreen() {
       setPostVerify(false);
       setSeconds(45);
     } catch {
-      setPostVerify(false);
       show({
         type: 'error',
-        title: 'Reenvio de Codigo',
-        message: `El Codigo de Seguridad no se pudo enviar nuevamente`,
+        title: 'Reenvío de código',
+        message: 'No se pudo reenviar el código.',
         duration: 2000,
         logo: require('@/assets/images/pame-logo-t.png'),
-      })
+      });
+    } finally {
+      setPostVerify(false);
     }
 
   };
@@ -151,18 +158,17 @@ export default function VerifyCodeScreen() {
       </KeyboardAvoidingView>
 
       {/* Loader overlay con animación de aparición/desaparición */}
-      {(isSubmitting || postVerify) && (
+      {busy && (
         <Animated.View
-          // Aparece suave cuando comienza submit o postLogin
           entering={FadeIn.duration(180)}
           exiting={FadeOut.duration(220)}
-          style={StyleSheet.absoluteFill}   // asegura que cubra toda la pantalla
-          pointerEvents="box-none"
+          style={StyleSheet.absoluteFill}
+          pointerEvents="auto" // bloquea taps debajo mientras está visible
         >
           <Loader
             visible
             variant="overlay"
-            message={isSubmitting ? 'Enviando Correo…' : 'Preparando tu panel…'}
+            message={busyMsg}
             backdropOpacity={0.45}
           />
         </Animated.View>

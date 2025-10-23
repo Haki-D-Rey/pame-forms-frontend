@@ -3,21 +3,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-// OJO: los paths deben existir 1:1 en tu árbol:
-// app/(admin)/dashboard/home.tsx
-// app/(admin)/dashboard/formulario.tsx
-// app/(admin)/dashboard/reportes.tsx
-// app/(admin)/security/users.tsx
-// app/(admin)/security/roles.tsx
-// app/(admin)/security/permissions.tsx
+
 const CARDS = [
   { title: 'Dashboard',   icon: 'view-dashboard-outline',     href: '/(admin)/dashboard/home' },
   { title: 'Formularios', icon: 'file-document-edit-outline', href: '/(admin)/dashboard/form' },
   { title: 'Reportes',    icon: 'chart-box-outline',          href: '/(admin)/dashboard/reporte' },
-  { title: 'Users',       icon: 'account-multiple-outline',   href: '/(admin)/security/users' },
+  { title: 'Users',       icon: 'account-multiple-outline',   href: '/(admin)/security/users/index' },
   { title: 'Roles',       icon: 'shield-account-outline',     href: '/(admin)/security/roles' },
   { title: 'Permissions', icon: 'key-outline',                href: '/(admin)/security/permissions' },
-] as const; // ← mantiene los literales; NO se tipa como string
+] as const;
 
 export default function AdminIndex() {
   const text = useThemeColor({}, 'text');

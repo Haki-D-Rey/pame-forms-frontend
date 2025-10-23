@@ -124,7 +124,7 @@ export default function LoginScreen() {
         duration: 1500,
         logo: require('@/assets/images/pame-logo-t.png'),
       });
-      await sleep(2000);
+      await sleep(1000);
       setPostLogin(false);
       router.replace('/(admin)/dashboard/home');
     } catch {

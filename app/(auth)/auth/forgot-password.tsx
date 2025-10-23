@@ -49,14 +49,17 @@ export default function ForgotPasswordScreen() {
       setPostForgot(false);
       router.push({ pathname: '/(auth)/auth/verfy-code', params: { email } });
     }
-    catch {
+    catch (e: any) {
       show({
         type: 'error',
         title: 'El envio de correo Fallo',
-        message: 'El Codigo de Seguridad no fue Enviado Correctamente al destinatario ' + email,
+        message: 'El Codigo de Seguridad no fue Enviado Correctamente al destinatario ' + email + ' - ' + e.message,
         duration: 2000,
         logo: require('@/assets/images/pame-logo-t.png'),
       })
+    }
+    finally {
+      setPostForgot(false);
     }
   };
 

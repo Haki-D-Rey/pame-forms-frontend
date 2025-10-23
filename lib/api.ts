@@ -2,52 +2,42 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from './config';
 
-// export const apiPublic: AxiosInstance = axios.create({
-//   baseURL: API_BASE_URL,
-//   timeout: 15000,
-// });
-
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
 });
 
-// ===== TIPADO PARA FLAGS PERSONALIZADAS =====
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
-    /** si true, no agrega Authorization ni intenta refresh */
     skipAuth?: boolean;
-    /** bandera interna para evitar refresh recursivo */
     _noRefresh?: boolean;
-    /** bandera interna para evitar retry infinito */
     _retry?: boolean;
   }
 }
 
-// ===== INTERCEPTORES SOLO EN `api` (protegido) =====
 type AttachOpts = {
   getAccessToken: () => Promise<string | null> | string | null;
-  refreshAccessToken: () => Promise<string | null>;
+  refreshAccessToken?: () => Promise<string | null>;   // ← ahora opcional
   onUnauthorized?: () => Promise<void> | void;
-  /** endpoints donde JAMÁS se debe inyectar auth ni refrescar */
   excludePaths?: RegExp;
+  disableRefresh?: boolean;                             // ← NUEVO
 };
 
 export function attachAuthInterceptors(instance: AxiosInstance, opts: AttachOpts) {
   const exclude = opts.excludePaths ?? /(\/auth\/login|\/auth\/refresh-token|\/auth\/logout)$/i;
 
   const reqId = instance.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-    // Respeta flags y paths públicos
     if (config.skipAuth || exclude.test(config.url ?? '')) return config;
 
-    // getAccessToken debe ser "seguro": si falla, que retorne null
-    let token: string | null = null;
-    try { token = await opts.getAccessToken(); } catch { token = null; }
+    try {
+      const token = await opts.getAccessToken();
+      console.log(token);
+      if (token) {
+        config.headers = config.headers ?? {};
+        (config.headers as any).Authorization = `Bearer ${token}`;
+      }
+    } catch { /* noop */ }
 
-    if (token) {
-      config.headers = config.headers ?? {};
-      (config.headers as any).Authorization = `Bearer ${token}`;
-    }
     return config;
   });
 
@@ -71,16 +61,35 @@ export function attachAuthInterceptors(instance: AxiosInstance, opts: AttachOpts
   const resId = instance.interceptors.response.use(
     (res) => res,
     async (error: AxiosError) => {
+
+
       const original = error.config as InternalAxiosRequestConfig | undefined;
       const status = error.response?.status;
 
-      // Si no hay config, o es público, o marcaste skipAuth/noRefresh → no intentes refresh
-      if (!original || original.skipAuth || original._noRefresh || (original.url && exclude.test(original.url))) {
+      console.log(original);
+      console.log(status);
+      // Público o sin config → no tocar
+      if (!original || original.skipAuth || (original.url && exclude.test(original.url))) {
         return Promise.reject(error);
       }
 
+      // ====> SIN REFRESH: 401 ⇒ signOut + redirect
+      if (opts.disableRefresh) {
+        if (status === 401) {
+          if (opts.onUnauthorized) await opts.onUnauthorized();
+        }
+        return Promise.reject(error);
+      }
+
+      // ====> CON REFRESH (por si luego lo quieres activar)
       if (status === 401 && !original._retry) {
         original._retry = true;
+
+        // Si no hay refreshAccessToken, comportarse como disableRefresh
+        if (!opts.refreshAccessToken) {
+          if (opts.onUnauthorized) await opts.onUnauthorized();
+          return Promise.reject(error);
+        }
 
         if (isRefreshing) {
           return new Promise((resolve, reject) => queue.push({ resolve, reject, config: original }));
@@ -88,7 +97,7 @@ export function attachAuthInterceptors(instance: AxiosInstance, opts: AttachOpts
 
         isRefreshing = true;
         try {
-          const newToken = await opts.refreshAccessToken(); // Debe actualizar tu store
+          const newToken = await opts.refreshAccessToken();
           await flush(null, newToken);
           isRefreshing = false;
 
@@ -106,6 +115,9 @@ export function attachAuthInterceptors(instance: AxiosInstance, opts: AttachOpts
       return Promise.reject(error);
     }
   );
+
+  console.log(reqId);
+  console.log(resId);
 
   return () => {
     instance.interceptors.request.eject(reqId);

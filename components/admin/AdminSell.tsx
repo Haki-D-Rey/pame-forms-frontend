@@ -19,7 +19,7 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = { children: React.ReactNode };
 
@@ -46,7 +46,6 @@ const RAIL_W = 272;
 const DRAWER_W = 300;
 const HEADER_H = 56;
 
-// Animación del contenido
 const CONTENT_ENTER_Y = 6;
 const CONTENT_FADE_IN_MS = 120;
 const CONTENT_SLIDE_IN_MS = 160;
@@ -65,6 +64,7 @@ export default function AdminShell({ children }: Props) {
   const tint = useThemeColor({}, 'tint');
 
   const [open, setOpen] = useState(false);
+  const [footerH, setFooterH] = useState(0); // si agregas footer fijo, lo medimos
 
   // Drawer (RN Animated)
   const animX = useRef(new RNAnimated.Value(-DRAWER_W)).current;
@@ -89,7 +89,6 @@ export default function AdminShell({ children }: Props) {
     setOpen(true);
     springTo(0).start();
   };
-
   const hideSidebar = (cb?: () => void) => {
     springTo(-DRAWER_W).start(({ finished }) => {
       if (finished) {
@@ -98,10 +97,9 @@ export default function AdminShell({ children }: Props) {
       }
     });
   };
-
   const toggleSidebar = () => (open ? hideSidebar() : showSidebar());
 
-  // Normaliza ruta: quita segmentos /(grupo)
+  // ruta sin grupos /(xxx)
   const stripGroups = (p: string = '') => p.replace(/\/\([^/]+\)/g, '');
   const currentPath = stripGroups(pathname ?? '');
 
@@ -110,25 +108,17 @@ export default function AdminShell({ children }: Props) {
     return currentPath === target || currentPath.startsWith(target + '/');
   };
 
-  // Navegación sin flicker
   const navigateFromMenu = (href: string) => {
-    if (isMd) {
-      router.replace(href as any);
-      return;
-    }
-    hideSidebar(() => router.replace(href as any));
+    if (isMd) router.replace(href as any);
+    else hideSidebar(() => router.replace(href as any));
   };
 
   const contentMarginLeft = isMd ? RAIL_W : 0;
-  const avatarLetter = useMemo(() => (user?.email ? user.email[0].toUpperCase() : 'U'), [user?.email]);
 
-  // Animación del main (RN Animated)
+  // Anim contenido
   const contentOpacity = useRef(new RNAnimated.Value(1)).current;
   const contentTranslateY = useRef(new RNAnimated.Value(0)).current;
-
-  // Loader (control booleano)
   const [loading, setLoading] = useState(false);
-
   const didMount = useRef(false);
 
   React.useEffect(() => {
@@ -138,14 +128,9 @@ export default function AdminShell({ children }: Props) {
       contentTranslateY.setValue(0);
       return;
     }
-
-    // Mostrar loader al cambiar de ruta
     setLoading(true);
-
-    // Animación de entrada del nuevo contenido
     contentOpacity.setValue(0);
     contentTranslateY.setValue(CONTENT_ENTER_Y);
-
     RNAnimated.parallel([
       RNAnimated.timing(contentOpacity, {
         toValue: 1,
@@ -159,18 +144,18 @@ export default function AdminShell({ children }: Props) {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // Espera a que terminen interacciones pesadas
-      InteractionManager.runAfterInteractions(() => {
-        setLoading(false);
-      });
+      InteractionManager.runAfterInteractions(() => setLoading(false));
     });
   }, [currentPath]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: bg }]}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      {/* Fondo */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: bg }]} />
+
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
+      {/* Header fijo */}
       <View
         style={[
           styles.header,
@@ -181,8 +166,13 @@ export default function AdminShell({ children }: Props) {
             backgroundColor: bg,
           },
         ]}
+        pointerEvents="box-none"
       >
-        <Pressable onPress={isMd ? undefined : toggleSidebar} style={[styles.iconBtn, { padding: 2 }]} accessibilityRole="button">
+        <Pressable
+          onPress={isMd ? undefined : toggleSidebar}
+          style={[styles.iconBtn, { padding: 2 }]}
+          accessibilityRole="button"
+        >
           {!isMd && <MaterialCommunityIcons name="menu" size={28} color={text} />}
         </Pressable>
 
@@ -201,43 +191,40 @@ export default function AdminShell({ children }: Props) {
         </View>
       </View>
 
-      {/* Main */}
+      {/* MAIN ABSOLUTO: anclado entre header/rail/borde inferior */}
       <RNAnimated.View
         style={[
-          styles.main,
+          styles.mainAbs,
           {
-            marginTop: topOffset,
-            marginLeft: contentMarginLeft,
+            top: topOffset,                  // debajo del header
+            left: contentMarginLeft,         // a la derecha del rail en desktop
+            paddingBottom: footerH + insets.bottom,
             opacity: contentOpacity,
             transform: [{ translateY: contentTranslateY }],
           },
         ]}
         renderToHardwareTextureAndroid
         shouldRasterizeIOS
+        collapsable={false}
       >
-        {children}
+        {/* Wrapper del contenido: garantiza flex real para listas internas */}
+        <View style={styles.content}>
+          {children}
+        </View>
       </RNAnimated.View>
 
-      {/* Loader con tu componente, cubre SOLO el main */}
+      {/* Loader overlay, SOLO cuando visible */}
       {loading && (
         <Animated.View
-          entering={FadeIn.duration(700)}
-          exiting={FadeOut.duration(800)}
+          entering={FadeIn.duration(220)}
+          exiting={FadeOut.duration(260)}
           style={[
-            StyleSheet.absoluteFill,
-            {
-              top: topOffset,
-              left: contentMarginLeft,
-            },
+            styles.loaderOverlay,
+            { top: topOffset, left: contentMarginLeft },
           ]}
           pointerEvents="auto"
         >
-          <Loader
-            visible
-            variant="overlay"
-            message="Cargando…"
-            backdropOpacity={0.45}
-          />
+          <Loader visible variant="overlay" message="Cargando…" backdropOpacity={0.45} />
         </Animated.View>
       )}
 
@@ -256,13 +243,20 @@ export default function AdminShell({ children }: Props) {
               }),
             },
           ]}
+          pointerEvents="auto"
         >
           <View style={{ flex: 1, minHeight: 0 }}>
             <SidebarContent
               text={text}
               tint={tint}
-              isActive={isActive}
-              onNavigate={navigateFromMenu}
+              isActive={(href) => {
+                const t = stripGroups(href);
+                return currentPath === t || currentPath.startsWith(t + '/');
+              }}
+              onNavigate={(href) => {
+                if (isMd) router.replace(href as any);
+                else hideSidebar(() => router.replace(href as any));
+              }}
               userEmail={user?.email}
               onSignOut={async () => {
                 await signOut();
@@ -277,7 +271,10 @@ export default function AdminShell({ children }: Props) {
       {!isMd && (
         <>
           {open && (
-            <RNAnimated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.backdrop, { top: topOffset, opacity: backdrop }]}>
+            <RNAnimated.View
+              pointerEvents="auto"
+              style={[styles.backdrop, { top: topOffset, opacity: backdrop, zIndex: 30 }]}
+            >
               <Pressable
                 onPress={() => hideSidebar()}
                 style={StyleSheet.absoluteFill}
@@ -287,6 +284,7 @@ export default function AdminShell({ children }: Props) {
           )}
 
           <RNAnimated.View
+            pointerEvents={open ? 'auto' : 'none'}
             style={[
               styles.drawer,
               {
@@ -298,6 +296,7 @@ export default function AdminShell({ children }: Props) {
                   android: 'rgba(250,250,250,1)',
                   default: 'rgba(255,255,255,0.98)',
                 }),
+                zIndex: 31,
               },
             ]}
           >
@@ -316,8 +315,14 @@ export default function AdminShell({ children }: Props) {
                 <SidebarContent
                   text={text}
                   tint={tint}
-                  isActive={isActive}
-                  onNavigate={navigateFromMenu}
+                  isActive={(href) => {
+                    const t = stripGroups(href);
+                    return currentPath === t || currentPath.startsWith(t + '/');
+                  }}
+                  onNavigate={(href) => {
+                    if (isMd) router.replace(href as any);
+                    else hideSidebar(() => router.replace(href as any));
+                  }}
                   userEmail={user?.email}
                   onSignOut={async () => {
                     await signOut();
@@ -329,11 +334,13 @@ export default function AdminShell({ children }: Props) {
           </RNAnimated.View>
         </>
       )}
-    </View>
+
+      {/* Si agregas footer fijo, mídelo aquí */}
+      <View onLayout={(e) => setFooterH(0)} style={{ height: 0 }} />
+    </SafeAreaView>
   );
 }
 
-/** Sidebar */
 function SidebarContent({
   text,
   tint,
@@ -350,20 +357,11 @@ function SidebarContent({
   onSignOut: () => Promise<void>;
 }) {
   const avatarLetter = useMemo(() => (userEmail ? userEmail[0].toUpperCase() : 'U'), [userEmail]);
-
   const initialExpanded = useMemo(
-    () =>
-      NAV.reduce((acc, sec) => {
-        acc[sec.section] = true;
-        return acc;
-      }, {} as Record<string, boolean>),
+    () => NAV.reduce((acc, sec) => ((acc[sec.section] = true), acc), {} as Record<string, boolean>),
     []
   );
   const [expanded, setExpanded] = useState<Record<string, boolean>>(initialExpanded);
-
-  const toggleSection = (key: string) => {
-    setExpanded((prev) => ({ ...prev, [key]: !(prev[key] ?? true) }));
-  };
 
   return (
     <View style={styles.sidebarContentWrap}>
@@ -372,21 +370,21 @@ function SidebarContent({
         contentContainerStyle={{ paddingHorizontal: 10, paddingTop: 6, paddingBottom: 12 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
       >
         {NAV.map((sec) => {
           const anyActive = sec.items.some((it) => isActive(it.href));
           const open = expanded[sec.section] ?? true;
-
           return (
             <View key={sec.section} style={{ marginBottom: 12 }}>
               <Pressable
-                onPress={() => toggleSection(sec.section)}
+                onPress={() => setExpanded((p) => ({ ...p, [sec.section]: !open }))}
                 style={[
                   styles.sectionHeader,
                   anyActive && { backgroundColor: `${tint}10`, borderColor: `${tint}55` },
                 ]}
                 accessibilityRole="button"
-                {...(Platform.OS === 'android' ? { android_ripple: { color: '#00000014', borderless: false } } : {})}
+                {...(Platform.OS === 'android' ? { android_ripple: { color: '#00000014' } } : {})}
               >
                 <View style={[styles.leftAccent, anyActive && { backgroundColor: tint, opacity: 0.9 }]} />
                 <Text style={[styles.sectionTitle, { color: text }]} numberOfLines={1}>
@@ -408,7 +406,7 @@ function SidebarContent({
                         pressed && { opacity: 0.9 },
                       ]}
                       accessibilityRole="button"
-                      {...(Platform.OS === 'android' ? { android_ripple: { color: '#00000010', borderless: false } } : {})}
+                      {...(Platform.OS === 'android' ? { android_ripple: { color: '#00000010' } } : {})}
                     >
                       <View style={[styles.itemLeftMarker, active && { backgroundColor: tint }]} />
                       <View style={styles.iconCell}>
@@ -443,6 +441,8 @@ function SidebarContent({
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1 },
+
   header: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -451,18 +451,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 20,
+    zIndex: 40,
   },
-  brandWrap: { flexDirection: 'row', alignItems: 'center' },
-  brand: { fontSize: 15, fontWeight: '800', letterSpacing: 0.2 },
+
+  // 🔑 CONTENEDOR PRINCIPAL ABSOLUTO DEL MAIN
+  mainAbs: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    padding: 12,
+    zIndex: 10,      // debajo del header/rail/drawer
+    // ¡NO usar marginTop/marginLeft aquí!
+  },
+
+  // wrapper de contenido
+  content: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+  },
 
   actionsRight: { flexDirection: 'row', alignItems: 'center' },
-  actionPill: {
-    height: 34, width: 34, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  main: { flex: 1, minHeight: 0, padding: 12 },
+  actionPill: { height: 34, width: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { height: 34, width: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  brandWrap: { flexDirection: 'row', alignItems: 'center' },
+  brand: { fontSize: 15, fontWeight: '800', letterSpacing: 0.2 },
 
   rail: {
     position: 'absolute',
@@ -471,6 +484,7 @@ const styles = StyleSheet.create({
     borderRightColor: '#00000012',
     flexDirection: 'column',
     minHeight: 0,
+    zIndex: 30,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
       android: { elevation: 6 },
@@ -512,43 +526,27 @@ const styles = StyleSheet.create({
   logoRow: { flexDirection: 'row', alignItems: 'center' },
   sidebarTitle: { fontSize: 15, fontWeight: '800' },
 
-  sidebarContentWrap: {
-    flex: 1,
-    minHeight: 0,
-  },
-
+  sidebarContentWrap: { flex: 1, minHeight: 0 },
   navItem: {
-    height: 46, minHeight: 46, maxHeight: 46, flexBasis: 46,
-    flexGrow: 0, flexShrink: 0,
+    height: 46, minHeight: 46, maxHeight: 46,
     position: 'relative',
     borderRadius: 12,
-    paddingRight: 12,
-    paddingLeft: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
+    paddingRight: 12, paddingLeft: 12,
+    alignItems: 'center', flexDirection: 'row',
     marginBottom: 6,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent',
     overflow: 'hidden',
   },
-  iconCell: {
-    width: 28, alignItems: 'center', justifyContent: 'center', marginRight: 8,
-  },
+  iconCell: { width: 28, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   navLabel: { fontSize: 15, fontWeight: '600' },
-
   sidebarFooter: {
     paddingHorizontal: 12, paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row', alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center',
   },
   avatar: {
     width: 32, height: 32, borderRadius: 999, backgroundColor: '#475569',
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 10,
-  },
-  iconBtn: {
-    height: 34, width: 34, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
   },
 
   sectionHeader: {
@@ -565,10 +563,17 @@ const styles = StyleSheet.create({
     width: 4, height: 18, borderRadius: 3, marginRight: 8,
     backgroundColor: '#cbd5e1',
   },
-
   itemLeftMarker: {
     position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
     borderTopLeftRadius: 12, borderBottomLeftRadius: 12,
     backgroundColor: 'transparent',
+  },
+
+  // overlay del loader
+  loaderOverlay: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
   },
 });
